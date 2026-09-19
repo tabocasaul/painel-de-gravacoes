@@ -1,0 +1,13 @@
+numpy==1.26.4
+librosa==0.10.2.post1
+resampy==0.4.3
+s3tokenizer==0.3.0
+transformers==4.46.3
+diffusers==0.29.0
+omegaconf==2.3.0
+resemble-perth==1.0.1
+silero-vad==5.1.2
+conformer==0.3.2
+safetensors==0.5.3
+sounddevice==0.5.3
+soundfile==0.13.1

@@ -1,0 +1,6 @@
+id=s22spoof
+name=S22 Model Spoof
+version=v1.0
+versionCode=1
+author=local
+description=Apresenta o dispositivo como Samsung Galaxy S22 (SM-S901B). Necessario para o app Minute aceitar o aparelho.

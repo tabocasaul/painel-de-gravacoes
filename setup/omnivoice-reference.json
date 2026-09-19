@@ -1,0 +1,10 @@
+{
+  "language": "Portuguese",
+  "age": "young adult",
+  "gender": "female",
+  "sha256": "E93511804CB585131B844E3D00AC6DC62FAF062E343CEF180D3A3A084FFC214F",
+  "text": "Oi, gente! Que bom ter vocês aqui. Me conta de qual cidade você está assistindo!",
+  "mode": "Voice Design",
+  "source": "https://huggingface.co/spaces/k2-fsa/OmniVoice",
+  "approved": true
+}

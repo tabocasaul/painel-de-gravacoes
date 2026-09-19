@@ -1,0 +1,6 @@
+omnivoice==0.2.1
+transformers==5.3.0
+sounddevice==0.5.3
+soundfile==0.13.1
+numpy==1.26.4
+librosa==0.10.2.post1

@@ -1,0 +1,19 @@
+=== Minute v1.22.0 (versionCode 1004023) - crash ao abrir a camera ===
+Dispositivo: BlueStacks 5.22.262 instancia Pie64, Android 9 (API 28), x86_64
+minSdk declarado pelo app: 24 (Android 7)
+
+09-04 02:43:30.493  2840  4539 I DeviceSyncService: Syncing devices of user. [CONTEXT service_id=284 ]
+--------- beginning of crash
+09-04 02:43:30.507  4641  4641 E AndroidRuntime: FATAL EXCEPTION: main
+09-04 02:43:30.507  4641  4641 E AndroidRuntime: Process: com.bakerdata.minute, PID: 4641
+09-04 02:43:30.507  4641  4641 E AndroidRuntime: java.lang.NoSuchFieldError: No field CONTROL_ZOOM_RATIO_RANGE of type Landroid/hardware/camera2/CameraCharacteristics$Key; in class Landroid/hardware/camera2/CameraCharacteristics; or its superclasses (declaration of 'android.hardware.camera2.CameraCharacteristics' appears in /system/framework/framework.jar)
+09-04 02:43:30.507  4641  4641 E AndroidRuntime: 	at app.useminute.egocapture.EgoCameraController.resolveUltraWide(EgoCameraController.kt:670)
+09-04 02:43:30.507  4641  4641 E AndroidRuntime: 	at app.useminute.egocapture.EgoCameraController.configureSurfaceTexture(EgoCameraController.kt:199)
+09-04 02:43:30.507  4641  4641 E AndroidRuntime: 	at app.useminute.egocapture.EgoCameraSources.donate(EgoCameraSources.kt:312)
+09-04 02:43:30.507  4641  4641 E AndroidRuntime: 	at app.useminute.egocapture.EgoCameraSources.attachPreview(EgoCameraSources.kt:179)
+09-04 02:43:30.507  4641  4641 E AndroidRuntime: 	at app.useminute.egocapture.EgoCameraPreview$textureView$1$1.onSurfaceTextureAvailable(EgoCameraPreview.kt:71)
+09-04 02:43:30.507  4641  4641 E AndroidRuntime: 	at android.view.TextureView.getTextureLayer(TextureView.java:390)
+09-04 02:43:30.507  4641  4641 E AndroidRuntime: 	at android.view.TextureView.draw(TextureView.java:339)
+09-04 02:43:30.507  4641  4641 E AndroidRuntime: 	at android.view.View.updateDisplayListIfDirty(View.java:19095)
+09-04 02:43:30.507  4641  4641 E AndroidRuntime: 	at android.view.View.draw(View.java:19948)
+09-04 02:43:30.507  4641  4641 E AndroidRuntime: 	at android.view.ViewGroup.drawChild(ViewGroup.java:4333)

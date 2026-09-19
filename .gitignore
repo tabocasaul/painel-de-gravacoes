@@ -1,0 +1,63 @@
+# APKs do Minute ficam de fora: app de terceiros, e a instalacao boa e pela
+# Play Store de qualquer jeito (sideload nao passa no PAIRIP). Sao so backup.
+apk/
+
+# artefatos de build
+lentes/build/
+lentes/*.idsig
+__pycache__/
+*.pyc
+
+# capturas temporarias
+/camvideo/*.png
+
+# videos preparados pelo camvideo/preparar.py (derivados, regeneraveis)
+*.pronto.*
+
+# videos que voce joga em camvideo/videos/ sao SEUS e nao vao pro repositorio.
+# So os dois de teste ficam versionados (ja rastreados). Isso evita subir por
+# engano um arquivo pessoal e grande, como aconteceu com um .mp4 de 2,5 GB.
+/camvideo/videos/*
+!/camvideo/videos/teste.mp4
+!/camvideo/videos/teste_vertical.mp4
+
+# saidas locais/empacotamento
+/artifacts/
+/build/
+/dist/
+/release/
+*.spec
+*.i420
+*.log
+/camvideo/videos/P03_102.mp4
+/aosp-camera-hal/
+/projeto-emulation.zip
+
+camvideo/web/current-runtime.json
+camvideo/web/current-runtime.json.tmp
+
+
+# Dados e ferramentas locais nao publicados
+.opencode-tmp/
+.codex/
+.env
+.env.*
+*.dpapi
+*.pem
+*.key
+*.qcow2
+*.i420
+*.mp4
+*.mov
+*.MOV
+frame-cache/
+shared-disks/
+automation-runtime/
+controle-tarefas.json
+loop-supervisor.json
+phone-names.json
+phone-groups.json
+shared-cameras.json
+prepared-video.json
+video-library.json
+interleaved-video-rotation.json

@@ -1,0 +1,37 @@
+name: Build Windows package
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build CameraEmulador.exe
+        shell: powershell
+        run: .\build-exe.ps1
+
+      - name: Assemble transferable package
+        shell: powershell
+        run: |
+          $stage = 'release\Emulation-Control'
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          git archive --format=zip --output=release\source.zip HEAD
+          Expand-Archive release\source.zip $stage -Force
+          New-Item -ItemType Directory -Force "$stage\dist\videos" | Out-Null
+          Copy-Item dist\CameraEmulador.exe "$stage\dist\CameraEmulador.exe"
+          Compress-Archive "$stage\*" release\Emulation-Control-Windows.zip -CompressionLevel Optimal
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Emulation-Control-Windows
+          path: release/Emulation-Control-Windows.zip
+          if-no-files-found: error

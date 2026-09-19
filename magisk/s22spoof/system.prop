@@ -1,0 +1,21 @@
+# O Minute barra aparelhos abaixo do Galaxy S22 lendo Build.MODEL.
+# Tem que valer no BOOT: aplicar com resetprop depois do sistema no ar nao adianta,
+# o app ja decidiu. Por isso e um modulo, e nao um comando avulso.
+ro.product.model=SM-S901B
+ro.product.manufacturer=samsung
+ro.product.brand=samsung
+ro.product.vendor.model=SM-S901B
+ro.product.vendor.manufacturer=samsung
+ro.product.vendor.brand=samsung
+ro.product.system.model=SM-S901B
+ro.product.system.manufacturer=samsung
+ro.product.system.brand=samsung
+ro.product.odm.model=SM-S901B
+ro.product.odm.manufacturer=samsung
+ro.product.odm.brand=samsung
+ro.product.product.model=SM-S901B
+ro.product.product.manufacturer=samsung
+ro.product.product.brand=samsung
+ro.product.system_ext.model=SM-S901B
+ro.product.system_ext.manufacturer=samsung
+ro.product.system_ext.brand=samsung

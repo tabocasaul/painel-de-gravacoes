@@ -1,0 +1,6 @@
+id=videocam
+name=Video source for Emulated Camera HAL
+version=0.1
+versionCode=1
+author=local
+description=Enables I420 frames for the custom Emulated Camera HAL.
