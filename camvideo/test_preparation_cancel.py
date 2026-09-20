@@ -16,8 +16,9 @@ import unittest
 from unittest.mock import Mock, patch
 
 from background_video import BackgroundVideo
-from preparation_job import PreparationJob, PreparationTracker, PreparationCancelled, run_conversion
+from preparation_job import PreparationJob, PreparationTracker, PreparationCancelled, run_conversion, stage_preparation_metadata
 from video_readiness import video_readiness
+from video_storage import VideoStorage
 
 
 class PreparationCancelTests(unittest.TestCase):
@@ -55,6 +56,9 @@ class PreparationCancelTests(unittest.TestCase):
             video_meta=Mock(return_value={'duration':.2}), update=notify, S=self.states,
             subprocess=SimpleNamespace(Popen=Mock(side_effect=popen),PIPE=subprocess.PIPE,BELOW_NORMAL_PRIORITY_CLASS=0),
             devices=Mock(side_effect=AssertionError('Cancellation must not touch ADB or phones')))
+        self.ns['VIDEO_STORAGE']=VideoStorage(self.area,self.videos)
+        self.ns['video_source']=self.ns['VIDEO_STORAGE'].source
+        self.ns['stage_preparation_metadata']=stage_preparation_metadata
         tree = ast.parse(Path(__file__).with_name('modern_server.pyw').read_text(encoding='utf-8-sig'))
         names = {'prepare_video','_prepare_video','cache_metadata_path','prepared_cache','cancel_preparation','action','job','install_targets','preparation_state_for_video'}
         definitions = [node for node in tree.body if isinstance(node,ast.FunctionDef) and node.name in names]
@@ -164,8 +168,8 @@ class PreparationCancelTests(unittest.TestCase):
         self.assertTrue(self.ns['prepared_cache'](str(self.source),False))
 
     def test_terminal_space_failure_can_be_cleared_without_restart(self):
-        self.ns['shutil'] = SimpleNamespace(disk_usage=lambda path:SimpleNamespace(free=0))
-        with self.assertRaisesRegex(RuntimeError,'GiB'):
+
+        with patch('video_storage.shutil.disk_usage',return_value=SimpleNamespace(free=0)), self.assertRaisesRegex(RuntimeError,'GiB'):
             self.ns['prepare_video']('clip.mp4',False,manual=True)
         self.states['busy'] = False
         failed = self.foreground.snapshot()

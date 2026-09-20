@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from mirror import TouchMirror
 from camera_transfer import Transfers
 from background_video import BackgroundVideo
-from preparation_job import PreparationJob, PreparationTracker, PreparationCancelled, run_conversion
+from preparation_job import PreparationJob, PreparationTracker, PreparationCancelled, run_conversion, stage_preparation_metadata
 from automation import Automation
 from automation_queue import run_queue, capacity_snapshot, wait_for_shutdown
 from task_history import task_usage, daily_task_rows
@@ -26,8 +26,10 @@ from tiktok_live import TikTokLive
 from tiktok_video import TikTokVideo
 from panel_runtime import runtime_identity, find_running_backend
 from participant_selection import recording_options, select_participants
+from video_orientation import rotate_copy
 from video_library import rename_video, delete_video, resolve_name, source_path
 from video_readiness import video_readiness
+from video_storage import VideoStorage
 
 HERE=os.path.dirname(os.path.abspath(__file__))
 FROZEN=bool(getattr(sys,"frozen",False)); RES=getattr(sys,"_MEIPASS",HERE)
@@ -44,6 +46,14 @@ try:
 except (OSError,ValueError,KeyError,TypeError):pass
 os.makedirs(AREA,exist_ok=True)
 with open(LIBRARY_CONFIG,"w",encoding="utf-8") as f:json.dump({"path":VIDEOS},f)
+VIDEO_STORAGE=VideoStorage(AREA,VIDEOS)
+
+def video_source(name):
+    return VIDEO_STORAGE.source(name)
+
+def resolve_video_name(name):
+    return VIDEO_STORAGE.resolve(AREA,name)
+
 P=SourceFileLoader("engine",os.path.join(RES,"painel.pyw")).load_module()
 E=object.__new__(P.Painel); E.cancelar_sync=threading.Event(); E.lock_historico=threading.Lock()
 LOCK=threading.Lock(); S={"busy":False,"message":"Sistema pronto.","level":"ok","progress":0,"elapsed":0,"total":0,"task":""}
@@ -85,7 +95,7 @@ def update(**kw):
         if S.get('planActive'):S['busy']=True
 def snap():
     with LOCK:return dict(S,backendPid=os.getpid(),backendVersion=5,
-                         supervisorVersion=1,interleavedPlanVersion=1,interleavedVideoListsVersion=1,interleavedSkipFailedRoundsVersion=1,participantSelectionVersion=1,videoLibraryVersion=1,
+                         supervisorVersion=1,interleavedPlanVersion=1,interleavedVideoListsVersion=1,interleavedSkipFailedRoundsVersion=1,participantSelectionVersion=1,videoLibraryVersion=1,videoOrientationVersion=1,
                          videoLibraryBusy=bool(S.get('libraryEditing') or PROXY_JOBS or PREPARATION_LOCK.locked() or UPLOAD_LOCK.locked()),
                          preparationCancellationVersion=1,foregroundPreparation=FOREGROUND_PREPARATION.snapshot(),
                          minuteCatalog=read_catalog(os.path.join(AREA,'minute-catalog.json')))
@@ -162,6 +172,7 @@ LIVE_VOICE=LiveVoice(VOICE,WRITER)
 TIKTOK_VIDEO=TikTokVideo(P.ADB,AREA,P.AVD_HOME,VIDEOS,RES,P.achar,hidden)
 def tiktok_devices():
     return {p['avd']:(p['serial'],p['serial'].split('-')[1]) for p in TIKTOK_VIDEO.phones()}
+TIKTOK_VIDEO.resolve_source=video_source
 TIKTOK=TikTokLive(E._adb,tiktok_devices)
 
 def status(serial):
@@ -274,8 +285,7 @@ def payload():
         background_state=BACKGROUND_VIDEO.snapshot()
         foreground_state=FOREGROUND_PREPARATION.snapshot()
         os.makedirs(VIDEOS,exist_ok=True); vs=[]
-        for n in sorted(os.listdir(VIDEOS),key=str.casefold):
-            q=os.path.join(VIDEOS,n)
+        for n,q in VIDEO_STORAGE.files():
             if os.path.isfile(q) and n.lower().endswith(P.EXTS) and not os.path.splitext(n)[0].endswith((".pronto",".montado")):
                 preparation_state=preparation_state_for_video(n,background_state,foreground_state)
                 readiness=video_readiness(n,prepared_cache(q,False,read_only=True),prepared_cache(q,True,read_only=True),ps,transfer_state['installedVideos'],preparation_state)
@@ -289,7 +299,7 @@ def payload():
         except (OSError,AttributeError):phone["storage"]="Desconhecido"
     known=[(installed[p["serial"]].get("name"),installed[p["serial"]].get("assetId")) if (installed.get(p["serial"],{}).get("confirmed") or installed.get(p["serial"],{}).get("staged")) else None for p in ps]
     common=known[0][0] if known and all(n and n==known[0] for n in known) else ""
-    x=snap(); x.update(backgroundVideo=background_state,backgroundVideoVersion=1,videoReadinessVersion=1,phones=ps,videos=vs,current=0,currentName=common,allVideoName=common,analytics=analytics(list(found)),mirror=MIRROR.state(),defaultStorageGiB=DEFAULT_STORAGE_GIB,apiVersion=4,sharedCameraVersion=1,automationVersion=5,queueVersion=2,dailyPlanVersion=1,capacity=capacity_snapshot(len(ps),sum(p['status']=='online' for p in ps)),automation=AUTOMATION.snapshot(),**transfer_state); return x
+    x=snap(); x.update(videoStorage=VIDEO_STORAGE.snapshot(),videoStorageVersion=1,backgroundVideo=background_state,backgroundVideoVersion=1,videoReadinessVersion=1,phones=ps,videos=vs,current=0,currentName=common,allVideoName=common,analytics=analytics(list(found)),mirror=MIRROR.state(),defaultStorageGiB=DEFAULT_STORAGE_GIB,apiVersion=4,sharedCameraVersion=1,automationVersion=5,queueVersion=2,dailyPlanVersion=1,capacity=capacity_snapshot(len(ps),sum(p['status']=='online' for p in ps)),automation=AUTOMATION.snapshot(),**transfer_state); return x
 
 def start_phone(n,s,p):
     if status(s)!="off":return
@@ -354,7 +364,7 @@ def prepare_video(name,fill,notify=None,background=False,preparation=None,manual
 
 def _prepare_video(name,fill,notify,background,token):
     token.check_cancel()
-    src=os.path.join(VIDEOS,os.path.basename(name))
+    src=video_source(os.path.basename(name))
     if not os.path.isfile(src):raise RuntimeError("video nao encontrado")
     if prepared_cache(src,fill):
         token.commit(lambda:None)
@@ -366,13 +376,7 @@ def _prepare_video(name,fill,notify,background,token):
     token.check_cancel()
     if duration<=0:raise RuntimeError("Nao foi possivel ler a duracao do video")
     required=int(duration*640*360*1.5*30)+512*1024*1024
-    cache_dir=os.path.join(AREA,"frame-cache");os.makedirs(cache_dir,exist_ok=True)
-    if shutil.disk_usage(cache_dir).free<required:
-        # Large frame caches may not fit on the Windows system drive. The
-        # library normally lives on the data SSD, so use it transparently.
-        cache_dir=os.path.join(VIDEOS,".frame-cache");os.makedirs(cache_dir,exist_ok=True)
-    if shutil.disk_usage(cache_dir).free<required:
-        raise RuntimeError(f"O PC precisa de {required/1024**3:.1f} GiB livres no C: ou no disco da biblioteca para preparar este video")
+    cache_dir=VIDEO_STORAGE.cache_directory(required,os.path.join(AREA,"frame-cache"),os.path.join(VIDEOS,".frame-cache"))
     ff=P.achar("ffmpeg")
     if not ff:raise RuntimeError("ffmpeg nao encontrado")
     filt="scale=640:360:force_original_aspect_ratio=increase,crop=640:360,setsar=1" if fill else "scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:black,setsar=1"
@@ -412,11 +416,9 @@ def _prepare_video(name,fill,notify,background,token):
               'sourceMtime':source_stat.st_mtime_ns,'rawSize':os.path.getsize(pending),'rawPath':raw_path}
         destinations=[cache_metadata_path(src,fill)]
         if not background:destinations.append(os.path.join(AREA,'prepared-video.json'))
+        notify(stage='Salvando preparação',progress=99,message='Salvando o registro final do vídeo...')
         for destination in destinations:
-            token.check_cancel()
-            with tempfile.NamedTemporaryFile(mode='w',encoding='utf-8',dir=os.path.dirname(destination),prefix='.preparation-',suffix='.tmp',delete=False) as meta:
-                staged.append((meta.name,destination))
-                json.dump(data,meta);meta.flush();os.fsync(meta.fileno())
+            staged.append(stage_preparation_metadata(destination,data,token))
         def publish():
             nonlocal published
             os.replace(pending,raw_path)
@@ -429,7 +431,7 @@ def _prepare_video(name,fill,notify,background,token):
     finally:
         for temporary,_ in staged:
             if os.path.isfile(temporary):os.remove(temporary)
-        if os.path.isfile(pending):os.remove(pending)
+        if pending and os.path.isfile(pending):os.remove(pending)
         if not published and os.path.isfile(raw_path):os.remove(raw_path)
     return os.path.basename(name)
 
@@ -460,7 +462,7 @@ def prepared_cache(src,fill,*,read_only=False):
     return None
 
 def check_camera_space(serial,name):
-    src=os.path.join(VIDEOS,os.path.basename(name))
+    src=video_source(os.path.basename(name))
     duration=video_meta(src).get("duration",0)
     if duration<=0:raise RuntimeError("Nao foi possivel ler o video")
     required=int(duration*640*360*1.5*30)+256*1024*1024
@@ -486,7 +488,7 @@ def install_targets(targets,name,fill,manual=False):
     name=os.path.basename(name)
     aliases=phone_names()
     TRANSFERS.reset([(aliases.get(s,{}).get("name") or n,s) for n,s in targets],name)
-    cache=prepared_cache(os.path.join(VIDEOS,name),fill)
+    cache=prepared_cache(video_source(name),fill)
     existing=TRANSFERS.snapshot()["installedVideos"]
     cache_id=(cache["sha256"]+":"+str(bool(fill))) if cache else None
     pending_targets=[(n,s) for n,s in targets if not(cache_id and (existing.get(s,{}).get("confirmed") or existing.get(s,{}).get("staged")) and existing[s].get("assetId")==cache_id and existing[s].get("mode")=="shared")]
@@ -496,7 +498,7 @@ def install_targets(targets,name,fill,manual=False):
         return
     for n,s in targets:TRANSFERS.mark(s,stage="Aguardando preparação",mode="shared")
     name=prepare_video(name,fill,manual=manual)
-    cache=prepared_cache(os.path.join(VIDEOS,name),fill)
+    cache=prepared_cache(video_source(name),fill)
     if not cache:raise RuntimeError("Os quadros preparados não foram confirmados")
     asset_id=cache["sha256"]+":"+str(bool(fill));raw_path=cache["rawPath"]
     update(stage="Ativando câmeras",progress=0,message=f"Ativando vídeo compartilhado em {len(targets)} celulares...")
@@ -509,7 +511,7 @@ def install_targets(targets,name,fill,manual=False):
             if (installed.get("confirmed") or installed.get("staged")) and installed.get("assetId")==asset_id and installed.get("mode")=="shared":
                 TRANSFERS.mark(s,stage="Concluido",bytes=os.path.getsize(raw_path),total=os.path.getsize(raw_path),percent=100)
                 return n,None
-            SHARED.install(n,s,dict(devices())[n][1],raw_path,name,os.path.getsize(os.path.join(VIDEOS,name)),asset_id,
+            SHARED.install(n,s,dict(devices())[n][1],raw_path,name,os.path.getsize(video_source(name)),asset_id,
                            start_phone,lambda serial:status(serial)!="off")
             return n,None
         except Exception as exc:
@@ -544,10 +546,10 @@ def add_phone():
     E._adb(s,"shell","pm","clear","com.bakerdata.minute",timeout=30);open_minute(s)
     update(busy=False,progress=100,message=n+" criado sem login no Minute.",level="ok")
 def preflight_plan_video(video):
-    video=resolve_name(VIDEOS,AREA,video)
-    if video != os.path.basename(video) or not os.path.isfile(os.path.join(VIDEOS,video)):
+    video=resolve_video_name(video)
+    if video != os.path.basename(video) or not os.path.isfile(video_source(video)):
         raise ValueError('Vídeo não encontrado na biblioteca: '+video)
-    cache=prepared_cache(os.path.join(VIDEOS,video),False)
+    cache=prepared_cache(video_source(video),False)
     if not cache:
         raise RuntimeError('Prepare em segundo plano na aba Vídeos antes de iniciar o plano: '+video)
     return cache
@@ -676,7 +678,7 @@ def sync(options=None):
             def preflight(video):
                 caches[video]=preflight_plan_video(video)
             def activate(eligible,video):
-                source_video=resolve_name(VIDEOS,AREA,video)
+                source_video=resolve_video_name(video)
                 AUTOMATION.check_cancel()
                 if interleaved:
                     pending=SUPERVISOR.state().get('pending',{})
@@ -863,13 +865,23 @@ def edit_video_library(data):
             S.update(busy=True,libraryEditing=True)
             reserved=True
         name=data.get('video')
-        source_path(VIDEOS,name)
+        library=os.path.dirname(video_source(name))
+        source_path(library,name)
         if not name.lower().endswith(P.EXTS):
             raise ValueError('Selecione um vídeo da biblioteca.')
-        if data['action']=='rename_video':
-            result=rename_video(VIDEOS,AREA,name,data.get('name'),RAW_READY)
+        if data['action']=='rotate_video':
+            directory=VIDEO_STORAGE.upload_directory()
+            proposed=os.path.splitext(name)[0]+' - GIRADO.mov'
+            output=VIDEO_STORAGE.upload_name(proposed,directory)
+            result=rotate_copy(video_source(name),os.path.join(directory,output),data.get('degrees'),P.achar('ffmpeg'),P.achar('ffprobe'),hidden())
+        elif data['action']=='rename_video':
+            proposed=data.get('name','')
+            if isinstance(proposed,str) and not os.path.splitext(proposed)[1]:proposed+=os.path.splitext(name)[1]
+            if any(n.casefold()==str(proposed).casefold() and os.path.normcase(q)!=os.path.normcase(video_source(name)) for n,q in VIDEO_STORAGE.files()):
+                raise ValueError('Já existe um vídeo com esse nome em outra pasta da biblioteca.')
+            result=rename_video(library,AREA,name,data.get('name'),RAW_READY)
         else:
-            result=delete_video(VIDEOS,name)
+            result=delete_video(library,name)
         META_CACHE.clear()
         return result
     finally:
@@ -883,7 +895,7 @@ def start_background_video(name,fill):
     # an old filename while a synchronous library edit is committing it.
     with LOCK:
         if S.get('libraryEditing'):raise ValueError('Aguarde a alteração da biblioteca terminar.')
-        if not name or not os.path.isfile(os.path.join(VIDEOS,name)):raise ValueError('Selecione um vídeo da biblioteca')
+        if not name or not os.path.isfile(video_source(name)):raise ValueError('Selecione um vídeo da biblioteca')
         BACKGROUND_VIDEO.start(name,fill)
 
 
@@ -901,9 +913,26 @@ def cancel_preparation(data):
         return result
 
 
+def configure_video_storage(data):
+    acquired=[]
+    try:
+        for mutex in (UPLOAD_LOCK,PREPARATION_LOCK,LIBRARY_LOCK):
+            if not mutex.acquire(blocking=False):raise ValueError('Aguarde a importação ou preparação terminar antes de mudar as pastas.')
+            acquired.append(mutex)
+        with LOCK:
+            if S.get('libraryEditing') or BACKGROUND_VIDEO.snapshot().get('busy') or FOREGROUND_PREPARATION.snapshot().get('busy'):
+                raise ValueError('Aguarde a alteração ou preparação do vídeo terminar.')
+            storage=VIDEO_STORAGE.configure(data.get('uploadPath'),data.get('cachePath',''))
+        META_CACHE.clear()
+        return {'videoStorage':storage}
+    finally:
+        for mutex in reversed(acquired):mutex.release()
+
+
 def action(d):
+    if d.get('action')=='configure_video_storage':return configure_video_storage(d)
     if d.get('action')=='cancel_preparation':return cancel_preparation(d)
-    if d.get('action') in {'rename_video','delete_video'}:return edit_video_library(d)
+    if d.get('action') in {'rename_video','delete_video','rotate_video'}:return edit_video_library(d)
     a=d.get("action");s=d.get("serial","");by={v[0]:(n,v[1]) for n,v in devices().items()}
     if a=="mirror_stop":MIRROR.stop()
     elif a=="mirror_start":
@@ -949,8 +978,10 @@ class H(BaseHTTPRequestHandler):
     def sendj(self,x,c=200):
         b=json.dumps(x,ensure_ascii=False).encode();self.send_response(c);self.send_header("Content-Type","application/json; charset=utf-8");self.send_header("Content-Length",str(len(b)));self.end_headers();self.wfile.write(b)
     def video_path(self):
-        name=os.path.basename(urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("name",[""])[0]);path=os.path.abspath(os.path.join(VIDEOS,name))
-        return path if path.startswith(os.path.abspath(VIDEOS)+os.sep) and os.path.isfile(path) else None
+        name=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("name",[""])[0]
+        try:path=video_source(name)
+        except ValueError:return None
+        return path if os.path.isfile(path) else None
     def send_media(self,path):
         size=os.path.getsize(path);start,end=0,size-1;partial=False
         match=re.match(r"bytes=(\d*)-(\d*)",self.headers.get("Range", ""))
@@ -1059,7 +1090,7 @@ class H(BaseHTTPRequestHandler):
             except (ValueError,TypeError,KeyError) as error:return self.sendj({"error":str(error)},400)
             except Exception as error:return self.sendj({"error":str(error)},500)
         if self.path=="/api/upload":
-            n=os.path.basename(urllib.parse.unquote(self.headers.get("X-Filename","video.mp4")));z=int(self.headers.get("Content-Length","0"));os.makedirs(VIDEOS,exist_ok=True)
+            n=os.path.basename(urllib.parse.unquote(self.headers.get("X-Filename","video.mp4")));z=int(self.headers.get("Content-Length","0"))
             if not n.lower().endswith(P.EXTS):return self.sendj({"error":"formato de video invalido"},400)
             if not n or z<=0:return self.sendj({"error":"Arquivo vazio"},400)
             background=self.headers.get("X-Background")=="1"
@@ -1069,30 +1100,31 @@ class H(BaseHTTPRequestHandler):
                     UPLOAD_LOCK.release()
                     return self.sendj({"error":"Aguarde a operacao atual"},409)
                 if not background:S.update(busy=True,stage="Importando",progress=0,level="info",message="Importando "+n)
-            stem,extension=os.path.splitext(n);suffix=2
-            while os.path.exists(os.path.join(VIDEOS,n)) or os.path.exists(os.path.join(VIDEOS,n)+".uploading"):
-                n=f"{stem} ({suffix}){extension}";suffix+=1
-            total=z;pending=os.path.join(VIDEOS,n)+".uploading"
+            pending=None
             try:
-                if shutil.disk_usage(VIDEOS).free<z+256*1024**2:raise RuntimeError("Espaco insuficiente no PC")
+                directory=VIDEO_STORAGE.upload_directory()
+                n=VIDEO_STORAGE.upload_name(n,directory)
+                total=z;pending=os.path.join(directory,n)+".uploading"
+                free=shutil.disk_usage(directory).free
+                if free<z+256*1024**2:raise RuntimeError(f'Espaço insuficiente em {os.path.realpath(directory)}: {free/1024**3:.1f} GiB livres. Escolha outra pasta em Armazenamento dos vídeos.')
                 with open(pending,"wb") as f:
                     while z:
                         q=self.rfile.read(min(z,8*1024*1024))
                         if not q:raise RuntimeError("Upload interrompido")
                         f.write(q);z-=len(q)
                         if not background:update(progress=int((total-z)*100/total),message="Importando "+n)
-                os.replace(pending,os.path.join(VIDEOS,n))
+                os.replace(pending,os.path.join(directory,n))
                 if not background:update(busy=False,progress=100,message=n+" importado",stage="Concluido",level="ok")
                 return self.sendj({"ok":True,"name":n})
             except Exception as exc:
-                if os.path.isfile(pending):os.remove(pending)
+                if pending and os.path.isfile(pending):os.remove(pending)
                 if not background:update(busy=False,level="error",message=str(exc))
                 return self.sendj({"error":str(exc)},400)
             finally:
                 UPLOAD_LOCK.release()
         try:
             d=json.loads(self.rfile.read(int(self.headers.get('Content-Length','0'))) or b'{}')
-            if isinstance(d,dict) and d.get('action') in {'rename_video','delete_video','cancel_preparation'}:
+            if isinstance(d,dict) and d.get('action') in {'rename_video','delete_video','rotate_video','cancel_preparation','configure_video_storage'}:
                 origin=self.headers.get('Origin')
                 if self.path!='/api/action' or (origin and origin!='http://'+self.headers.get('Host','')):
                     return self.sendj({'error':'Origem não autorizada'},403)

@@ -14,6 +14,7 @@ class UploadTests(unittest.TestCase):
     def setUp(self):
         self.directory=tempfile.TemporaryDirectory()
         panel.VIDEOS=self.directory.name
+        panel.VIDEO_STORAGE=panel.VideoStorage(self.directory.name,self.directory.name)
         panel.S.update(busy=False)
         self.server=panel.PanelServer(('127.0.0.1',0),panel.H)
         self.thread=threading.Thread(target=self.server.serve_forever,daemon=True);self.thread.start()

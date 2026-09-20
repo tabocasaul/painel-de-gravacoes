@@ -146,3 +146,31 @@ def run_conversion(process, job, on_line, grace=1.0, poll_interval=.05):
             job.notify(message='Aguardando o conversor encerrar antes de liberar uma nova preparação.',
                        error=problem)
             time.sleep(max(poll_interval, .01))
+
+
+def stage_preparation_metadata(destination, data, token):
+    """Write on the physical disk with bounded retries, including cancellation."""
+    import json
+    import os
+    directory = os.path.realpath(os.path.dirname(destination))
+    destination = os.path.join(directory, os.path.basename(destination))
+    os.makedirs(directory, exist_ok=True)
+    for attempt in range(3):
+        token.check_cancel()
+        temporary = os.path.join(directory, '.preparation-' + uuid.uuid4().hex + '.tmp')
+        try:
+            stream = open(temporary, 'x', encoding='utf-8')
+        except FileExistsError:
+            continue
+        try:
+            with stream:
+                json.dump(data, stream)
+                token.check_cancel()
+                stream.flush()
+                os.fsync(stream.fileno())
+            return temporary, destination
+        except BaseException:
+            if os.path.isfile(temporary):
+                os.remove(temporary)
+            raise
+    raise RuntimeError('Não foi possível criar o registro da preparação após três tentativas.')

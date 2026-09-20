@@ -90,7 +90,7 @@ class TikTokVideo:
             return value
 
     def start(self, serial, name, output, volume=.8):
-        source = library_video(self.library, name)
+        source = library_video(Path(self.resolve_source(name)).parent if hasattr(self, 'resolve_source') else self.library, name)
         if not isinstance(output, str) or 'CABLE Input' not in output:
             raise ValueError('Selecione CABLE Input como saída de áudio do vídeo.')
         volume = float(volume)

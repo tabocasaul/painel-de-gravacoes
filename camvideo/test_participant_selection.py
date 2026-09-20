@@ -116,6 +116,7 @@ class ServerSelectionTests(unittest.TestCase):
                                                     isfile=Mock(return_value=True))),
             AREA='unused', VIDEOS='unused', read_catalog=Mock(return_value={'tasks': ['A', 'B']}),
             resolve_name=lambda library, area, name: name,
+            resolve_video_name=lambda name: name, video_source=lambda name: os.path.join('unused',name),
             AUTOMATION=self.a, E=self.e, update=Mock(), TRANSFERS=SimpleNamespace(
                 snapshot=lambda: {'installedVideos': self.installed}),
             SHARED=SimpleNamespace(activate_pending=Mock()), start_phone=Mock(), wait_open=Mock(),

@@ -1,7 +1,7 @@
 # Painel de Gravações
 
 Painel local para Windows com biblioteca de vídeos, preparação de câmera e
-automação de aparelhos Android. **Versão 2.3.43.**
+automação de aparelhos Android. **Versão 2.3.46.**
 
 Esta cópia contém o código atual do projeto, inclusive as correções de seleção
 de aparelhos, início em grupo, alternância de vídeos e retomada de envios.
@@ -32,6 +32,15 @@ de aparelhos, início em grupo, alternância de vídeos e retomada de envios.
 São necessários Windows de 64 bits, virtualização habilitada, espaço em SSD e
 memória suficiente para os aparelhos escolhidos. A instalação baixa dependências;
 o aplicativo Minute precisa de conexão para acessar tarefas e enviar gravações.
+
+## Atualizações 2.3.46
+
+- Botão **Girar vídeo** com prévia, direita, esquerda e 180°; salva uma cópia sem alterar o original. Prepare a cópia e selecione-a nas tarefas.
+- Escolha das pastas e discos de importação e preparação no próprio painel.
+- Importação de vídeos durante a automação, sem trocar a fonte em uso.
+- Correção da finalização da preparação que podia ficar em 100%.
+
+Esses controles funcionam localmente, sem chamadas ao Codex ou consumo de tokens.
 
 ## Recursos atuais
 

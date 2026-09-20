@@ -24,7 +24,8 @@ render=function(state){
     const installed=phone.installedVideo;
     return `<div class="usage-row"><header><strong>${esc(phone.name)}</strong><span>${esc(phone.storage||'')} • ${phone.status==='online'?'Online':phone.status==='off'?'Desligado':'Iniciando'}</span></header><p>Na câmera: <strong>${esc(installed?.name||'Não confirmado')+(installed?.staged?' (pronta; valida ao abrir)':installed&&!installed.confirmed?' (aguardando confirmação)':'')}</strong>${installed?` • ${size(installed.bytes)} ${installed.mode === "shared" ? "compartilhados no PC" : "de quadros locais"}`:''}</p>${transfer?`<header><span>${esc(transfer.stage)} • ${esc(transfer.video)}</span><strong>${transfer.percent||0}%</strong></header><div class="mini-track"><i style="width:${transfer.percent||0}%"></i></div><small>${transfer.mode === "shared" ? "Fonte compartilhada • sem cópia do vídeo para o celular" : `${size(transfer.bytes)} / ${size(transfer.total)}`}${transfer.stage==="Enviando"&&transfer.speed?` • ${size(transfer.speed)}/s • ~${Math.ceil(transfer.eta/60)} min`:""}${transfer.error?` • ${esc(transfer.error)}`:''}</small>`:''}</div>`;
   }).join('');
-  for(const id of ['install','install-all','add','upload'])$(id).disabled=!!state.busy||!!state.foregroundPreparation?.busy||!!app.uploadProgress;
+  for(const id of ['install','install-all','add'])$(id).disabled=!!state.busy||!!state.foregroundPreparation?.busy||!!app.uploadProgress;
+  $('upload').disabled=!!state.foregroundPreparation?.busy||!!app.uploadProgress;
   if(!state.sharedCameraVersion){
     $('install').disabled=true;$('install-all').disabled=true;
     $('video-stage').textContent='Atualização pronta: reinicie o processo do painel para ativar a câmera compartilhada. O envio antigo foi interrompido e os arquivos parciais foram preservados.';
@@ -36,13 +37,13 @@ $('upload').onchange=async event=>{
   app.uploadProgress={name:file.name,percent:0,loaded:0,total:file.size};render(app.state);
   try{
     const body=await new Promise((resolve,reject)=>{
-      const xhr=new XMLHttpRequest();xhr.open('POST','/api/upload');xhr.setRequestHeader('X-Filename',encodeURIComponent(file.name));
+      const xhr=new XMLHttpRequest();xhr.open('POST','/api/upload');xhr.setRequestHeader('X-Filename',encodeURIComponent(file.name));xhr.setRequestHeader('X-Background','1');
       xhr.upload.onprogress=e=>{app.uploadProgress={name:file.name,percent:e.lengthComputable?Math.min(99,Math.floor(e.loaded*100/e.total)):0,loaded:e.loaded,total:e.total||file.size};render(app.state)};
       xhr.onload=()=>{try{const body=JSON.parse(xhr.responseText);xhr.status>=200&&xhr.status<300?resolve(body):reject(Error(body.error||'Falha ao importar'))}catch(e){reject(e)}};
       xhr.onerror=()=>reject(Error('Conexão interrompida durante a importação'));
       xhr.onabort=()=>reject(Error('Importação cancelada'));xhr.send(file);
     });
-    app.video=body.name;app.videoHash='';toast('Vídeo importado');
+    if(!app.state.busy){app.video=body.name;app.videoHash='';}toast('Vídeo adicionado à biblioteca. Prepare-o quando desejar.');
   }catch(error){toast(error.message)}
   finally{app.uploadProgress=null;event.target.value='';await refresh()}
 };

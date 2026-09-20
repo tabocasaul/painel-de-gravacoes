@@ -15,7 +15,8 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler
 
 from background_video import BackgroundVideo
-from preparation_job import PreparationJob, run_conversion
+from video_storage import VideoStorage
+from preparation_job import PreparationJob, run_conversion, stage_preparation_metadata
 
 
 class BackgroundTests(unittest.TestCase):
@@ -30,6 +31,7 @@ class BackgroundTests(unittest.TestCase):
                            P=types.SimpleNamespace(EXTS=('.mp4',)),
                            LOCK=threading.Lock(), UPLOAD_LOCK=threading.Lock(),
                            S=running, update=lambda **kw: running.update(kw))
+            context['VIDEO_STORAGE']=VideoStorage(folder,folder)
             exec(compile(ast.Module(body=[handler], type_ignores=[]), '<handler>', 'exec'), context)
             instance = object.__new__(context['H'])
             instance.path = '/api/upload'
@@ -72,12 +74,14 @@ class BackgroundTests(unittest.TestCase):
             active.write_text('{"active":"unchanged"}')
             global_updates = []
             context = dict(os=os, time=time, hashlib=hashlib, json=json, shutil=shutil,
-                           tempfile=tempfile,PreparationJob=PreparationJob,run_conversion=run_conversion,
+                           tempfile=tempfile,PreparationJob=PreparationJob,run_conversion=run_conversion,stage_preparation_metadata=stage_preparation_metadata,
                            subprocess=subprocess, VIDEOS=folder, AREA=folder, RAW_READY='',
                            PREPARATION_LOCK=threading.Lock(), hidden=lambda: {},
                            P=types.SimpleNamespace(achar=shutil.which),
                            video_meta=lambda path: {'duration': .2},
                            update=lambda **kw: global_updates.append(kw))
+            context['VIDEO_STORAGE']=VideoStorage(folder,folder)
+            context['video_source']=context['VIDEO_STORAGE'].source
             exec(compile(definitions, '<preparation>', 'exec'), context)
             events = []
             prepare = context['prepare_video']

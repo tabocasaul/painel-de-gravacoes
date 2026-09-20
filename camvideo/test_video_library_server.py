@@ -12,6 +12,7 @@ import unittest
 from unittest.mock import Mock
 
 from video_library import rename_video, source_path, resolve_name
+from video_storage import VideoStorage
 
 
 class LibraryServerTests(unittest.TestCase):
@@ -35,6 +36,9 @@ class LibraryServerTests(unittest.TestCase):
             P=SimpleNamespace(EXTS=('.mov','.mp4')), VIDEOS=str(self.videos), AREA=str(self.area), RAW_READY='unused',
             source_path=source_path, resolve_name=resolve_name, rename_video=rename_video, delete_video=Mock(),
             devices=Mock(side_effect=AssertionError('Video edits must not touch phones')))
+        self.ns['VIDEO_STORAGE']=VideoStorage(self.area,self.videos)
+        self.ns['video_source']=self.ns['VIDEO_STORAGE'].source
+        self.ns['resolve_video_name']=lambda name:self.ns['VIDEO_STORAGE'].resolve(str(self.area),name)
         source = ast.parse(Path(__file__).with_name('modern_server.pyw').read_text(encoding='utf-8-sig'))
         names = {'action','edit_video_library','start_background_video','preflight_plan_video','library_read'}
         body = [node for node in source.body if isinstance(node, ast.FunctionDef) and node.name in names]
