@@ -46,6 +46,15 @@ const Dashboard = (() => {
       byTask:[...tasks.values()].map(t=>({...t,phones:[...phones.keys()].map(name=>({name,seconds:t.phones.get(name)||0}))})).sort((a,b)=>b.seconds-a.seconds)};
   }
   function reais(seconds, rate) { return Math.max(0,seconds)/3600*4*rate; }
-  return {range, aggregate, reais};
+  function onlinePhones(byPhone, devices) {
+    const saved=new Map((byPhone||[]).map(row=>[row.name,row.seconds]));
+    const seen=new Set();
+    const rows=(devices||[]).filter(phone=>{
+      if(phone.status!=='online'||seen.has(phone.serial))return false;
+      seen.add(phone.serial);return true;
+    }).map(phone=>({name:phone.name,serial:phone.serial,seconds:saved.get(phone.avd||phone.name)||0}));
+    return {rows,seconds:rows.reduce((total,row)=>total+row.seconds,0)};
+  }
+  return {range, aggregate, reais, onlinePhones};
 })();
 if (typeof module !== 'undefined') module.exports = Dashboard;

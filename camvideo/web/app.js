@@ -70,8 +70,12 @@ $('task-period-title').textContent=isToday?'Uso por tarefa hoje':'Total por tare
 renderWeek(data.chart);renderEarnings(data.seconds);
 const tasks=isToday?(analytics.byTask||[]):data.byTask;
 $('task-usage').innerHTML=tasks.length?tasks.map(x=>`<div class="usage-row"><header><span>${esc(x.name)}</span><strong>${formatTime(x.seconds,true)}</strong></header>${(x.phones||[]).map(p=>`<div class="usage-row"><header><span>${esc(p.name)}</span><strong>${formatTime(p.seconds,true)}${isToday?' / 2h 00min':''}</strong></header>${isToday?`<div class="mini-track"><i style="width:${Math.min(100,p.seconds/7200*100)}%"></i></div><small>${p.available?'Disponível para esta tarefa':'Limite de hoje concluído para esta tarefa'}</small>`:''}</div>`).join('')}</div>`).join(''):empty('clock','Nenhuma tarefa registrada','Não há horas salvas neste período');
-const max=Math.max(1,...data.byPhone.map(x=>x.seconds));
-$('phone-usage').innerHTML=data.byPhone.map(x=>`<div class="usage-row"><header><span>${esc(x.name)}</span><strong>${formatTime(x.seconds,true)}</strong></header><div class="mini-track"><i style="width:${x.seconds/max*100}%"></i></div></div>`).join('');
+const rate=Number($('dashboard-exchange').value),validRate=Number.isFinite(rate)&&rate>0;
+const amount=seconds=>validRate?brl(Dashboard.reais(seconds,rate)):'Informe a cotação';
+const online=Dashboard.onlinePhones(data.byPhone,app.state.phones);
+$('phone-period-title').textContent='Ganhos por telefone';
+const max=Math.max(1,...online.rows.map(x=>x.seconds));
+$('phone-usage').innerHTML=`<p>Horas salvas no período selecionado, por aparelho ligado agora. A estimativa usa a mesma cotação do total geral.</p>`+(online.rows.length?online.rows.map(x=>`<div class="usage-row"><header><span>${esc(x.name)}</span><span class="phone-earnings-values"><span class="phone-saved-hours">${formatTime(x.seconds,true)}</span><strong class="phone-earned-money">${amount(x.seconds)}</strong></span></header><div class="mini-track"><i style="width:${x.seconds/max*100}%"></i></div></div>`).join(''):'<p>Nenhum celular online no momento.</p>');
 for(const id of ['dashboard-start','dashboard-end'])$(id).max=analytics.day;
 }
 function setupDashboard(){

@@ -5,7 +5,7 @@ import json
 import os
 from pathlib import Path
 
-APP_VERSION = '2.3.46'
+APP_VERSION = '2.3.47'
 
 BACKEND_FILES = ('video_orientation.py', 'video_storage.py', 'preparation_job.py', 'video_readiness.py', 'windows_recycle.py', 'video_library.py', 'synchronized_recording_start.py', 'interleaved_participants.py', 'interleaved_video_rotation.py', 'participant_selection.py', 'daily_plan.py', 'background_video.py', 'modern_server.pyw', 'painel.pyw', 'automation.py', 'automation_queue.py', 'task_history.py', 'unicode_search.py', 'camera_transfer.py',
                  'shared_camera.py', 'mirror.py', 'storage.py', 'voice_manager.py',

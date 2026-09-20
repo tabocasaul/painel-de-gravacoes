@@ -548,15 +548,43 @@ class Automation:
                     return ready(item, attempt + 1)
                 self.mark(s, stage='Erro na preparação', error=str(exc))
                 raise
-        errors = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(2, len(targets))) as pool:
-            for future in [pool.submit(ready, item) for item in targets.items()]:
-                try:
-                    future.result()
-                except Exception as exc:
-                    errors.append(str(exc))
-        if errors and (require_all_ready or not tolerate_failures):
-            raise RuntimeError('Gravação não iniciada: '+'; '.join(errors))
+        # Retry only task navigation, before any recording worker is created.
+        # Join every preparation worker before revisiting the entire group.
+        attempts = 3 if auto and require_all_ready else 1
+        recoverable = (
+            'A lista do Minute não está visível',
+            'Não consegui abrir a lista de tarefas',
+            'Não consegui reconhecer a tela do Minute',
+            'O Minute não ficou em primeiro plano',
+            'O Minute não abriu em ',
+            'A câmera da tarefa não está pronta',
+        )
+        for preparation_attempt in range(attempts):
+            durations.clear()
+            errors = []
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(2, len(targets))) as pool:
+                for future in [pool.submit(ready, item) for item in targets.items()]:
+                    try:
+                        future.result()
+                    except Exception as exc:
+                        errors.append(exc)
+            self.check_cancel()
+            if not errors:
+                break
+            retry = (preparation_attempt + 1 < attempts and
+                     all(isinstance(exc, RuntimeError) and str(exc).startswith(recoverable) for exc in errors))
+            if retry:
+                for serial, _ in targets.values():
+                    self.mark(serial, stage='Aguardando nova busca em grupo')
+                self.update(stage='Recuperando busca da tarefa', level='warn',
+                    message=f'Um celular não ficou pronto. Nova busca nos {len(targets)} aparelhos em 5 segundos (tentativa {preparation_attempt+2}/{attempts}).')
+                if self.e.cancelar_sync.wait(5):
+                    self.check_cancel()
+                self.check_cancel()
+                continue
+            if require_all_ready or not tolerate_failures:
+                raise RuntimeError('Gravação não iniciada: '+'; '.join(map(str, errors)))
+            break
         self.check_cancel()
         if tolerate_failures and not require_all_ready:
             ready_rows=self.snapshot()
